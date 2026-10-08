@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jarvis</title>
+<style>
+  :root { --bg: #0d0f12; --card: #161a1f; --line: #272d35; --dim: #8f99a5; --fg: #e9edf2; --accent: #ff7448; --you: #2a3340; --ok: #4cc38a; --bad: #f87171; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 22px/1.4 "Noto Sans", "DejaVu Sans", sans-serif; overflow: hidden; }
+  .wrap { display: grid; grid-template-rows: auto 1fr auto; height: 100%; padding: 28px 24px 24px; gap: 16px; }
+  header .app { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 26px; }
+  header .dot { width: 14px; height: 14px; border-radius: 4px; background: var(--accent); }
+  header .title { color: var(--dim); font-size: 18px; margin-top: 6px; }
+  header .turn { color: var(--dim); font-size: 16px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  #log { min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; overflow: hidden; }
+  .msg { max-width: 92%; padding: 12px 16px; border-radius: 16px; animation: in 180ms ease-out; }
+  .msg.you { align-self: flex-end; background: var(--you); border-bottom-right-radius: 4px; }
+  .msg.jarvis { align-self: flex-start; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); border-bottom-left-radius: 4px; }
+  .msg .who { font-size: 14px; color: var(--dim); margin-bottom: 2px; }
+  .msg.jarvis .who { color: var(--accent); }
+  .msg .heard { font-size: 15px; color: var(--dim); margin-top: 4px; }
+  .act { align-self: flex-start; font-size: 16px; color: var(--dim); padding: 2px 4px; }
+  .act b { color: var(--fg); font-weight: 500; }
+  .act.ok b { color: var(--ok); } .act.bad b { color: var(--bad); }
+  footer { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 0 18px; border-radius: 18px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+  .bars { display: flex; gap: 5px; align-items: center; height: 32px; }
+  .bars i { width: 6px; height: 8px; border-radius: 3px; background: var(--dim); }
+  footer.listening .bars i, footer.speaking .bars i { animation: bar 0.9s ease-in-out infinite; }
+  footer.speaking .bars i { background: var(--accent); }
+  footer.listening .bars i { background: var(--fg); }
+  footer.thinking .bars i { animation: pulse 1.2s ease-in-out infinite; }
+  .bars i:nth-child(2) { animation-delay: .15s !important; } .bars i:nth-child(3) { animation-delay: .3s !important; } .bars i:nth-child(4) { animation-delay: .45s !important; } .bars i:nth-child(5) { animation-delay: .6s !important; }
+  #status { font-size: 20px; }
+  @keyframes bar { 0%, 100% { height: 8px; } 50% { height: 30px; } }
+  @keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  @keyframes in { from { transform: translateY(6px); opacity: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="app"><span class="dot"></span>Jarvis</div>
+    <div class="title" id="title"></div>
+    <div class="turn" id="turn"></div>
+  </header>
+  <div id="log"></div>
+  <footer id="foot"><div class="bars"><i></i><i></i><i></i><i></i><i></i></div><div id="status">Ready</div></footer>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // Older messages scroll off the top (flex-end + overflow hidden clips them); keep the DOM small.
+  const add = (html, cls) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; $('log').append(d); while ($('log').children.length > 30) $('log').firstElementChild.remove(); return d; };
+  window.scene = {
+    title(t) { $('title').textContent = t; },
+    turn(i, n) { $('turn').textContent = `Turn ${i} of ${n}`; },
+    status(kind, text) { $('foot').className = kind; $('status').textContent = text; },
+    user(text) { return add(`<div class="who">You</div>${esc(text)}`, 'msg you'); },
+    heard(text) { const last = [...document.querySelectorAll('.msg.you')].at(-1); if (last && text) last.insertAdjacentHTML('beforeend', `<div class="heard">Heard: "${esc(text)}"</div>`); },
+    jarvis(text) { return add(`<div class="who">Jarvis</div>${esc(text)}`, 'msg jarvis'); },
+    action(text) { return add(`<b>${esc(text)}</b>`, 'act'); },
+    verdict(ok, text) { return add(`<b>${ok ? 'Pass' : 'Miss'}</b> ${esc(text)}`, `act ${ok ? 'ok' : 'bad'}`); },
+  };
+</script>
+</body>
+</html>

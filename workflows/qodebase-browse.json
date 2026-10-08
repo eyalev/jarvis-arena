@@ -1,0 +1,14 @@
+{
+  "name": "qodebase-browse",
+  "title": "Browsing a code project by voice",
+  "start_url": "about:blank",
+  "context": "qodebase is at https://qodebase.app/, a git platform for AI agents. Public projects live at https://qodebase.app/p/<owner>/<project>. The focus timer project is https://qodebase.app/p/forq/timer; its code is at https://qodebase.app/p/forq/timer/code/ and its live app at https://qodebase.app/p/forq/timer/app.",
+  "voices": { "user": "arcas", "jarvis": "draco" },
+  "lines": [
+    { "text": "Open qodebase.", "say": "Open code base.", "expect": { "url_includes": "qodebase.app" } },
+    { "text": "Open the timer project.", "expect": { "url_includes": "/p/forq/timer" } },
+    { "text": "What is this project about?", "expect": { "reply_matches": "timer" } },
+    { "text": "Show me the code.", "expect": { "url_includes": "/code" } },
+    { "text": "Thanks, Jarvis." }
+  ]
+}

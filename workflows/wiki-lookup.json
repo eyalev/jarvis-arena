@@ -1,0 +1,14 @@
+{
+  "name": "wiki-lookup",
+  "title": "Looking something up, then asking about it",
+  "start_url": "about:blank",
+  "context": "To look something up on Wikipedia, open https://en.wikipedia.org/wiki/<Title_With_Underscores>.",
+  "voices": { "user": "arcas", "jarvis": "draco" },
+  "lines": [
+    { "text": "Open Wikipedia.", "expect": { "url_includes": "wikipedia.org" } },
+    { "text": "Look up the Eiffel Tower.", "expect": { "url_includes": "Eiffel" } },
+    { "text": "How tall is it?", "expect": { "reply_matches": "3[0-9]{2}" } },
+    { "text": "When was it built?", "expect": { "reply_matches": "188[0-9]" } },
+    { "text": "Thanks." }
+  ]
+}

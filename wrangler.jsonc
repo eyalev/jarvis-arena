@@ -1,0 +1,24 @@
+{
+  "name": "jarvis-arena",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "ai": { "binding": "AI" },
+  "d1_databases": [{ "binding": "DB", "database_name": "jarvis-arena", "database_id": "f66fe012-09e8-40c5-bf72-3628f779b6cb", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "VIDEOS", "bucket_name": "jarvis-arena-videos" }],
+  // One Run Durable Object per run starts the stage container itself (durable_object policy).
+  "containers": [{
+    "class_name": "Run",
+    "scheduling_policy": "durable_object",
+    "images": { "stage": { "dockerfile": "./stage/Dockerfile", "build_context": "./stage" } }
+  }],
+  "durable_objects": { "bindings": [{ "name": "RUN", "class_name": "Run" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Run"] }],
+  "vars": {
+    "MODEL": "@cf/zai-org/glm-4.7-flash",
+    // Every Workers AI call goes through this AI Gateway (rate-limited, watched by the
+    // account's AI breaker). Leave empty on your own deploy to call Workers AI directly.
+    "GATEWAY": "jarvis"
+  }
+}
