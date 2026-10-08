@@ -9,10 +9,19 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import qodebaseBrowse from '../workflows/qodebase-browse.json';
 import wikiLookup from '../workflows/wiki-lookup.json';
-import { renderHome, renderRun } from './pages';
+import { renderHome, renderRun, renderAbout, renderPrivacy, renderFeedback, renderNotFound, ORIGIN } from './pages';
+import { admin } from './access';
+import { submitFeedback, kstats, ownPath, ROBOTS } from './site';
 
 export interface Env {
   AI: Ai;
+  ASSETS: Fetcher;
+  CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };
+  FEEDBACK_KEY?: string;
+  KSTATS_KEY?: string;
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
+  ACCESS_ALLOWED_EMAIL?: string;
   DB: D1Database;
   VIDEOS: R2Bucket;
   RUN: DurableObjectNamespace<Run>;
@@ -190,50 +199,66 @@ export class Run extends DurableObject<Env> {
 
 /* ---------------- HTTP ---------------- */
 
-const authed = (req: Request, env: Env) => {
-  const cookie = /(?:^|;\s*)arena=([^;]+)/.exec(req.headers.get('cookie') || '')?.[1];
-  const header = req.headers.get('x-arena-token') || (req.headers.get('authorization') || '').replace(/^Bearer /, '');
-  return !!env.ADMIN_TOKEN && (cookie === env.ADMIN_TOKEN || header === env.ADMIN_TOKEN);
-};
-const html = (body: string, status = 200) => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+const html = (body: string, status = 200, cache = 'no-store') => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': cache } });
+
+/** Public pages are the same for everyone: keep each rendered answer at the edge for a while (per colo). */
+async function memo(request: Request, ctx: ExecutionContext, ttl: number, render: () => Promise<Response>) {
+  const key = new Request(new URL(request.url).origin + new URL(request.url).pathname, { method: 'GET' });
+  const hit = await caches.default.match(key);
+  if (hit) return hit;
+  const res = await render();
+  if (res.status === 200) {
+    const copy = new Response(res.clone().body, res);
+    copy.headers.set('cache-control', `public, max-age=${ttl}`);
+    ctx.waitUntil(caches.default.put(key, copy));
+  }
+  return res;
+}
+
+const RUN_LIST = `SELECT id, workflow, status, created_at, finished_at, cost_usd, result FROM runs ORDER BY created_at DESC LIMIT 30`;
+
+async function health(env: Env) {
+  const checks: { id: string; label: string; status: string; detail: string; at: string }[] = [];
+  const at = new Date().toISOString();
+  try {
+    const stuck = await env.DB.prepare(`SELECT COUNT(*) AS n FROM runs WHERE status IN ('queued','running') AND created_at < ?`).bind(new Date(Date.now() - 15 * 60_000).toISOString()).first<{ n: number }>();
+    checks.push({ id: 'stuck', label: 'Runs stuck over 15 min', status: (stuck?.n ?? 0) ? 'bad' : 'ok', detail: String(stuck?.n ?? 0), at });
+    const last = await env.DB.prepare(`SELECT status, created_at FROM runs ORDER BY created_at DESC LIMIT 1`).first<{ status: string; created_at: string }>();
+    checks.push({ id: 'last_run', label: 'Last run', status: !last ? 'unknown' : last.status === 'error' ? 'warn' : 'ok', detail: last ? `${last.status} at ${last.created_at}` : 'none yet', at });
+  } catch (e) {
+    checks.push({ id: 'db', label: 'Database', status: 'unknown', detail: `could not read: ${String(e).slice(0, 120)}`, at });
+  }
+  return { sha: env.CF_VERSION_METADATA?.tag || null, built: env.CF_VERSION_METADATA?.timestamp || null, checks };
+}
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === '/login') {
-      if (url.searchParams.get('token') !== env.ADMIN_TOKEN || !env.ADMIN_TOKEN) return html('<p>Wrong token.</p>', 403);
-      const next = url.searchParams.get('next') || '/';
-      return new Response(null, { status: 302, headers: { location: next.startsWith('/') && !next.startsWith('//') ? next : '/', 'set-cookie': `arena=${env.ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000` } });
-    }
-    if (!authed(request, env)) return html('<p>Jarvis Arena is private for now.</p>', 401);
+    const p = url.pathname;
 
-    if (url.pathname.startsWith('/ai/') && request.method === 'POST') return aiHandler(request, env);   // for a stage run outside Cloudflare (local test)
+    // The workers.dev address only serves the operator's scripts; people use the real one.
+    if (url.hostname.endsWith('.workers.dev') && !p.startsWith('/ai/') && !p.startsWith('/api/') && p !== '/login') return Response.redirect(ORIGIN + p + url.search, 301);
 
-    if (url.pathname === '/api/runs' && request.method === 'POST') {
-      const { workflow } = (await request.json()) as { workflow: string };
-      const wf = WORKFLOWS[workflow];
-      if (!wf) return Response.json({ error: `unknown workflow ${workflow}` }, { status: 404 });
-      const busy = await env.DB.prepare(`SELECT COUNT(*) AS n FROM runs WHERE status IN ('queued','running') AND created_at > ?`).bind(new Date(Date.now() - RUN_LIMIT_MS).toISOString()).first<{ n: number }>();
-      if ((busy?.n ?? 0) >= 2) return Response.json({ error: 'two runs are already going; wait for one to finish' }, { status: 429 });
-      const id = `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${crypto.randomUUID().slice(0, 6)}`;
-      await env.DB.prepare(`INSERT INTO runs (id, workflow, status, created_at, model) VALUES (?, ?, 'queued', ?, ?)`).bind(id, wf.name, new Date().toISOString(), env.MODEL).run();
-      await env.RUN.get(env.RUN.idFromName(id)).start(id, wf);
-      return Response.json({ id, url: `/runs/${id}` }, { status: 201 });
+    /* ---- public ---- */
+    if (p === '/' && request.method === 'GET') return memo(request, ctx, 60, async () => {
+      const { results } = await env.DB.prepare(RUN_LIST).all();
+      return html(renderHome(Object.values(WORKFLOWS), results as Record<string, unknown>[], null));
+    });
+    let m = /^\/runs\/([\w-]+)$/.exec(p);
+    if (m && request.method === 'GET') {
+      const id = m[1];
+      const row = await env.DB.prepare(`SELECT * FROM runs WHERE id = ?`).bind(id).first();
+      if (!row) return html(renderNotFound(), 404);
+      const done = !['queued', 'running'].includes(String(row.status));
+      return html(renderRun(row as Record<string, unknown>, WORKFLOWS[String(row.workflow)]), 200, done ? 'public, max-age=300' : 'no-store');
     }
-    let m = /^\/api\/runs\/([\w-]+)$/.exec(url.pathname);
-    if (m) {
-      const row = await env.DB.prepare(`SELECT * FROM runs WHERE id = ?`).bind(m[1]).first();
-      if (!row) return Response.json({ error: 'not found' }, { status: 404 });
-      const live = ['queued', 'running'].includes(String(row.status)) ? await env.RUN.get(env.RUN.idFromName(m[1])).status() : null;
-      return Response.json({ ...row, result: row.result ? JSON.parse(String(row.result)) : null, live });
-    }
-    m = /^\/video\/([\w-]+)\.mp4$/.exec(url.pathname);
+    m = /^\/video\/([\w-]+)\.mp4$/.exec(p);
     if (m) {
       const range = request.headers.get('range');
       const rm = range && /bytes=(\d+)-(\d*)/.exec(range);
       const obj = await env.VIDEOS.get(`runs/${m[1]}.mp4`, rm ? { range: rm[2] ? { offset: Number(rm[1]), length: Number(rm[2]) - Number(rm[1]) + 1 } : { offset: Number(rm[1]) } } : {});
       if (!obj) return new Response('not found', { status: 404 });
-      const h = new Headers({ 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=3600' });
+      const h = new Headers({ 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'public, max-age=86400', 'x-robots-tag': 'noindex' });
       if (rm && obj.range && 'offset' in obj.range) {
         const off = obj.range.offset ?? 0, len = obj.range.length ?? obj.size - off;
         h.set('content-range', `bytes ${off}-${off + len - 1}/${obj.size}`); h.set('content-length', String(len));
@@ -242,16 +267,58 @@ export default {
       h.set('content-length', String(obj.size));
       return new Response(obj.body, { headers: h });
     }
-    m = /^\/runs\/([\w-]+)$/.exec(url.pathname);
-    if (m) {
-      const row = await env.DB.prepare(`SELECT * FROM runs WHERE id = ?`).bind(m[1]).first();
-      if (!row) return html('<p>No such run.</p>', 404);
-      return html(renderRun(row as Record<string, unknown>, WORKFLOWS[String(row.workflow)]));
+    m = /^\/api\/runs\/([\w-]+)$/.exec(p);
+    if (m && request.method === 'GET') {
+      const row = await env.DB.prepare(`SELECT id, workflow, status, created_at, finished_at, cost_usd, video_key FROM runs WHERE id = ?`).bind(m[1]).first();
+      if (!row) return Response.json({ error: 'not found' }, { status: 404 });
+      const live = ['queued', 'running'].includes(String(row.status)) ? await env.RUN.get(env.RUN.idFromName(m[1])).status() : null;
+      return Response.json({ ...row, live }, { headers: { 'cache-control': 'no-store' } });
     }
-    if (url.pathname === '/') {
-      const { results } = await env.DB.prepare(`SELECT id, workflow, status, created_at, finished_at, cost_usd, result FROM runs ORDER BY created_at DESC LIMIT 30`).all();
-      return html(renderHome(Object.values(WORKFLOWS), results as Record<string, unknown>[]));
+    if (p === '/about') return memo(request, ctx, 3600, async () => html(renderAbout()));
+    if (p === '/privacy') return memo(request, ctx, 3600, async () => html(renderPrivacy()));
+    if (p === '/feedback') {
+      if (request.method === 'POST') {
+        const r = await submitFeedback(request, env);
+        const fields = r.fields as Record<string, string | null>;
+        return html(renderFeedback({ page: fields.page ?? null, sent: r.ok, error: r.message, fields }), r.ok ? 200 : 502);
+      }
+      return html(renderFeedback({ page: ownPath(url.searchParams.get('page')) }));
     }
-    return html('<p>Not found.</p>', 404);
+    if (p === '/e') return kstats(request, env, ctx);
+    if (p === '/version.json') return Response.json({ sha: env.CF_VERSION_METADATA?.tag || null, built: env.CF_VERSION_METADATA?.timestamp || null }, { headers: { 'cache-control': 'no-store' } });
+    if (p === '/health.json') return memo(request, ctx, 300, async () => Response.json(await health(env)));
+    if (p === '/robots.txt') return new Response(ROBOTS(ORIGIN), { headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=3600' } });
+    if (p === '/sitemap.xml') return memo(request, ctx, 3600, async () => {
+      const { results } = await env.DB.prepare(`SELECT id, finished_at FROM runs WHERE status = 'done' AND video_key IS NOT NULL ORDER BY created_at DESC LIMIT 500`).all<{ id: string; finished_at: string }>();
+      const urls = ['/', '/about', '/privacy'].map((u) => `<url><loc>${ORIGIN}${u}</loc></url>`).concat(results.map((r) => `<url><loc>${ORIGIN}/runs/${r.id}</loc><lastmod>${r.finished_at}</lastmod></url>`));
+      return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join('')}</urlset>`, { headers: { 'content-type': 'application/xml' } });
+    });
+
+    /* ---- the operator ---- */
+    if (p === '/login') {
+      if (!env.ADMIN_TOKEN || url.searchParams.get('token') !== env.ADMIN_TOKEN) return html(renderNotFound(), 404);
+      const next = url.searchParams.get('next') || '/admin';
+      return new Response(null, { status: 302, headers: { location: next.startsWith('/') && !next.startsWith('//') ? next : '/admin', 'set-cookie': `arena=${env.ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000` } });
+    }
+    if (p === '/admin' || p.startsWith('/ai/') || (p === '/admin/runs' && request.method === 'POST')) {
+      const who = await admin(request, env);
+      if (!who) return html(renderNotFound(), 404);
+      if (p.startsWith('/ai/') && request.method === 'POST') return aiHandler(request, env);   // a stage run outside Cloudflare (local test)
+      if (p === '/admin') {
+        const { results } = await env.DB.prepare(RUN_LIST).all();
+        return html(renderHome(Object.values(WORKFLOWS), results as Record<string, unknown>[], who));
+      }
+      const { workflow } = (await request.json()) as { workflow: string };
+      const wf = WORKFLOWS[workflow];
+      if (!wf) return Response.json({ error: `unknown workflow ${workflow}` }, { status: 404 });
+      const busy = await env.DB.prepare(`SELECT COUNT(*) AS n FROM runs WHERE status IN ('queued','running') AND created_at > ?`).bind(new Date(Date.now() - RUN_LIMIT_MS).toISOString()).first<{ n: number }>();
+      if ((busy?.n ?? 0) >= 2) return Response.json({ error: 'two runs are already going; wait for one to finish' }, { status: 429 });
+      const id = `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${crypto.randomUUID().slice(0, 6)}`;
+      await env.DB.prepare(`INSERT INTO runs (id, workflow, status, created_at, model) VALUES (?, ?, 'queued', ?, ?)`).bind(id, wf.name, new Date().toISOString(), env.MODEL).run();
+      await env.RUN.get(env.RUN.idFromName(id)).start(id, wf);
+      log('run_requested', { id, workflow: wf.name, by: who });
+      return Response.json({ id, url: `/runs/${id}` }, { status: 201 });
+    }
+    return html(renderNotFound(), 404);
   },
 } satisfies ExportedHandler<Env>;

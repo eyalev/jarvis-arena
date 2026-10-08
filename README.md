@@ -3,6 +3,10 @@
 Run a voice-agent workflow on Cloudflare and get back a video of it, a pass or miss
 for every step, and what it cost.
 
+**See the runs: https://jarvis-arena.kapps.dev**
+
+![A run: the conversation on the left, the browser Jarvis drives on the right](public/og.png)
+
 A **workflow** is a JSON file: what the user says, line by line, and what should be
 true after each line. A run plays it as a scene:
 
@@ -33,8 +37,18 @@ npx wrangler deploy                             # first deploy uploads a ~1.2 GB
 openssl rand -hex 24 | npx wrangler secret put ADMIN_TOKEN
 ```
 
-Open `https://jarvis-arena.<your-subdomain>.workers.dev/login?token=<ADMIN_TOKEN>`, pick a
-workflow, press **Run**. A run takes 2–4 minutes.
+Before deploying, edit `wrangler.jsonc` for your account:
+- `routes`: your own domain, or delete the line to use `*.workers.dev`;
+- `GATEWAY`: your AI Gateway id, or `""`;
+- `ACCESS_*`: a Cloudflare Access app on `<your host>/admin`, or empty to use the token only.
+
+Then open `https://<your host>/login?token=<ADMIN_TOKEN>`: it takes you to `/admin`, where
+each workflow has a **Run** button. A run takes 2–4 minutes. The public pages (`/`,
+`/runs/<id>`) show every run read-only; only `/admin` can start one.
+
+Optional, and off unless set: `FEEDBACK_KEY` (the feedback form posts to the author's
+inbox; change `INBOX` in `src/site.ts` to yours) and `KSTATS_KEY` (first-party analytics;
+remove the `k.js` tag in `src/pages.ts` if you do not use kstats).
 
 ## What a run costs
 
@@ -64,7 +78,22 @@ Add the file to `workflows/` and to the import list in `src/index.ts`.
 
 | | |
 |---|---|
-| `src/index.ts` | Worker: pages, API, the Run Durable Object, AI for the container, cost |
-| `src/pages.ts` | Home (workflows, runs) and run page |
+| `src/index.ts` | Worker: routes, the Run Durable Object, AI for the container, cost |
+| `src/pages.ts` | Pages: runs, one run, about, privacy, feedback, admin |
+| `src/access.ts` | The admin gate (Cloudflare Access JWT, or the token) |
+| `src/site.ts` | Feedback, analytics forwarder, robots |
+| `scripts/check-390.mjs` | Phone check of every public page, light and dark |
 | `stage/` | The container: `server.mjs` (scene runner), `phone.html` (the phone pane), `Dockerfile` |
 | `workflows/` | Workflow files |
+
+## Status
+
+Early. Jarvis here is a plain model with four browser tools, and it is slow (often 10–20 s
+an answer) and sometimes asks instead of acting. That is the point of recording it: the
+next steps are replays (a pass rate, not one lucky run), stricter checks, and several
+models side by side. Ideas and workflows are welcome: open an issue, or use the feedback
+form on the site.
+
+## License
+
+MIT. Fonts: SIL Open Font License (`public/fonts/README.md`).

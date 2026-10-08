@@ -4,6 +4,11 @@
   "compatibility_date": "2026-09-30",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "routes": [{ "pattern": "jarvis-arena.kapps.dev", "custom_domain": true }],
+  // The public pages' static files (fonts, icon, share image). Everything else is the Worker.
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  // /version.json and /health.json read the deploy tag (deploy with --tag <short sha>).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "ai": { "binding": "AI" },
   "d1_databases": [{ "binding": "DB", "database_name": "jarvis-arena", "database_id": "f66fe012-09e8-40c5-bf72-3628f779b6cb", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "VIDEOS", "bucket_name": "jarvis-arena-videos" }],
@@ -19,6 +24,12 @@
     "MODEL": "@cf/zai-org/glm-4.7-flash",
     // Every Workers AI call goes through this AI Gateway (rate-limited, watched by the
     // account's AI breaker). Leave empty on your own deploy to call Workers AI directly.
-    "GATEWAY": "jarvis"
+    "GATEWAY": "jarvis",
+    // Cloudflare Access in front of /admin (app eb30a782-…); the Worker re-verifies the JWT.
+    // Your own deploy: create an Access app for <host>/admin and put its values here, or leave
+    // them empty and use ADMIN_TOKEN (/login?token=…).
+    "ACCESS_TEAM_DOMAIN": "billowing-unit-6a20.cloudflareaccess.com",
+    "ACCESS_AUD": "507fc2c83ac149eec6f661dca091d22fca37b0202e5f74ca67b425fff9737ca2",
+    "ACCESS_ALLOWED_EMAIL": "eyalev@gmail.com"
   }
 }

@@ -14,3 +14,15 @@ Eyal 2026-10-08: "make it on Cloudflare, make sure it works, private repo first,
 - [ ] Stricter checks: "Show me the code" passed on the address while Jarvis asked a question instead
 - [ ] Model choice per run (compare models: the arena part)
 - [ ] One-click deploy (Deploy to Cloudflare button / qodebase install), then public — Eyal's call
+
+## Going public (Eyal 2026-10-08: "let's go public")
+Defaults chosen: name Jarvis Arena, jarvis-arena.kapps.dev, MIT, public read-only gallery, runs behind Access.
+- [x] Public read-only gallery; Run only in /admin (Access JWT or token); public pages memoised
+- [x] /version.json + /health.json (tagged deploys)
+- [x] /about, /privacy, /feedback (central inbox), footer on every page
+- [x] kstats: /e forwarder + k.js, self-marking from /admin; site registered
+- [x] og:image, robots.txt, sitemap.xml, 404, external links marked
+- [x] Domain jarvis-arena.kapps.dev; Access app on /admin
+- [x] LICENSE (MIT), README public-ready, CLAUDE.md ## Baseline, secret scan of history (clean)
+- [x] 390 px check script (0 fails) + screenshots light/dark, 1440
+- [ ] Repo public; register (Workbench, site-doctor, projects-registry)
