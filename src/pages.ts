@@ -24,6 +24,9 @@ a { color: var(--accent); text-underline-offset: 3px; }
 ol.lines { padding-left: 20px; margin: 8px 0 0; color: var(--dim); font-size: 14px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 td { padding: 6px 0; border-top: 1px solid var(--line); } td:last-child { text-align: right; }
+.speed { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.speed button { min-height: 44px; min-width: 56px; padding: 0 12px; border-radius: 12px; border: 0; background: var(--card); color: var(--fg); font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.speed button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 video { width: 100%; border-radius: 12px; background: #000; aspect-ratio: 16 / 9; display: block; }
 .turn { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); }
 .turn .who { font-size: 13px; color: var(--dim); }
@@ -97,12 +100,13 @@ export function renderRun(row: Record<string, unknown>, wf?: Workflow) {
   return page(`${wf?.title || row.workflow} · run`, `<p><a href="/">Jarvis Arena</a></p>
     <h1>${esc(wf?.title || row.workflow)}</h1>
     <div class="row" style="justify-content:flex-start"><span class="tag ${esc(row.status)}" id="st">${esc(row.status)}</span>${fresh(row.created_at)}${res?.checks ? `<span>${res.passed} of ${res.checks} checks passed</span>` : ''}</div>
-    ${row.video_key ? `<h2>Recording</h2><video controls playsinline preload="metadata" src="/video/${esc(row.id)}.mp4"></video>` : running ? `<div class="card" style="margin-top:16px" id="live">Starting the stage…</div>` : ''}
+    ${row.video_key ? `<h2>Recording</h2><video id="vid" controls playsinline preload="metadata" src="/video/${esc(row.id)}.mp4"></video>
+      <div class="speed" role="group" aria-label="Playback speed">${[1, 1.5, 2, 3, 4].map((r) => `<button type="button" data-rate="${r}" aria-pressed="false">${r}×</button>`).join('')}</div>` : running ? `<div class="card" style="margin-top:16px" id="live">Starting the stage…</div>` : ''}
     ${res?.error ? `<h2>What went wrong</h2><pre>${esc(res.error)}</pre>` : ''}
     ${turns ? `<h2>Turns</h2>${turns}` : ''}
     ${costRows ? `<h2>What it cost</h2><table>${costRows}</table><p class="dim" style="font-size:13px">List prices of ${esc(res.cost.prices)}, before Workers Paid's included monthly usage. Container CPU is an upper bound (billed on actual use). Container: ${esc(res.container_seconds)} s, ${esc(res.usage?.chat_calls ?? 0)} model calls.</p>` : ''}
     ${res?.events ? `<h2>Stage log</h2><pre>${esc(JSON.stringify(res.events, null, 1)).slice(0, 8000)}</pre>` : ''}`,
-  running ? `const id = ${JSON.stringify(row.id)};
+  SPEED + (running ? `const id = ${JSON.stringify(row.id)};
     async function poll() {
       try { const j = await (await fetch('/api/runs/' + id)).json();
         if (!['queued','running'].includes(j.status)) return location.reload();
@@ -111,5 +115,17 @@ export function renderRun(row: Record<string, unknown>, wf?: Workflow) {
       } catch (e) {}
       setTimeout(poll, 3000);
     }
-    poll();` : '');
+    poll();` : ''));
 }
+
+// Playback speed: buttons under the video, the choice remembered on this device (also keys 1-5).
+const SPEED = `(() => {
+  const v = document.getElementById('vid'); if (!v) return;
+  const btns = [...document.querySelectorAll('.speed button')];
+  const set = (r) => { v.playbackRate = r; v.defaultPlaybackRate = r; btns.forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.rate) === r))); try { localStorage.setItem('arena-rate', String(r)); } catch (e) {} };
+  let saved = 1; try { saved = Number(localStorage.getItem('arena-rate')) || 1; } catch (e) {}
+  set(saved);
+  v.addEventListener('loadedmetadata', () => { v.playbackRate = saved; });
+  btns.forEach((b) => b.onclick = () => { saved = Number(b.dataset.rate); set(saved); });
+  document.addEventListener('keydown', (e) => { const i = '12345'.indexOf(e.key); if (i >= 0 && !e.target.closest('input,textarea')) { saved = Number(btns[i].dataset.rate); set(saved); } });
+})();`;
