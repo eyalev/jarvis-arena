@@ -293,13 +293,20 @@ async function runScene(id, wf, layoutName = 'vertical') {
 
     // Jarvis acts, then answers.
     const screen = await world.eval('({ title: document.title, url: location.href })').catch(() => ({}));
-    messages.push({ role: 'user', content: `${turn.heard}\n\n[Browser now: ${screen.title || ''} ${screen.url || ''}]` });
+    const blank = !screen.url || /127\.0\.0\.1:\d+\/blank|about:blank/.test(screen.url);
+    messages.push({ role: 'user', content: `${turn.heard}\n\n[Browser now: ${blank ? 'nothing open yet' : `${screen.title || ''} ${screen.url}`}]` });
     turn.tools = [];
     let reply = '';
     for (let step = 0; step < 6; step++) {
       const msg = await chat(messages, TOOLS);
       const calls = msg.tool_calls || [];
       messages.push({ role: 'assistant', content: msg.content || '', ...(calls.length ? { tool_calls: calls } : {}) });
+      if (!calls.length && !speakable(msg.content) && !turn.nudged) {
+        // An empty answer with no action: one nudge to act, as a person would repeat themselves.
+        turn.nudged = true;
+        messages.push({ role: 'user', content: 'Do it now with the tools, then answer in one short sentence.' });
+        continue;
+      }
       if (!calls.length) { reply = speakable(msg.content); break; }
       for (const c of calls) {
         let args = {};

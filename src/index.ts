@@ -342,7 +342,7 @@ export default {
       const next = url.searchParams.get('next') || '/admin';
       return new Response(null, { status: 302, headers: { location: next.startsWith('/') && !next.startsWith('//') ? next : '/admin', 'set-cookie': `arena=${env.ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000` } });
     }
-    if (p === '/admin' || p.startsWith('/ai/') || (p === '/admin/runs' && request.method === 'POST')) {
+    if (p === '/admin' || p.startsWith('/ai/') || ((p === '/admin/runs' || p === '/api/runs') && request.method === 'POST')) {
       const who = await admin(request, env);
       if (!who) return html(renderNotFound(), 404);
       if (p.startsWith('/ai/') && request.method === 'POST') return aiHandler(request, env);   // a stage run outside Cloudflare (local test)
