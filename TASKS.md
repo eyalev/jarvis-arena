@@ -25,4 +25,4 @@ Defaults chosen: name Jarvis Arena, jarvis-arena.kapps.dev, MIT, public read-onl
 - [x] Domain jarvis-arena.kapps.dev; Access app on /admin
 - [x] LICENSE (MIT), README public-ready, CLAUDE.md ## Baseline, secret scan of history (clean)
 - [x] 390 px check script (0 fails) + screenshots light/dark, 1440
-- [ ] Repo public; register (Workbench, site-doctor, projects-registry)
+- [x] Repo public (eyalev/jarvis-arena); registered on Workbench + site-doctor
