@@ -202,7 +202,8 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/login') {
       if (url.searchParams.get('token') !== env.ADMIN_TOKEN || !env.ADMIN_TOKEN) return html('<p>Wrong token.</p>', 403);
-      return new Response(null, { status: 302, headers: { location: '/', 'set-cookie': `arena=${env.ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000` } });
+      const next = url.searchParams.get('next') || '/';
+      return new Response(null, { status: 302, headers: { location: next.startsWith('/') && !next.startsWith('//') ? next : '/', 'set-cookie': `arena=${env.ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000` } });
     }
     if (!authed(request, env)) return html('<p>Jarvis Arena is private for now.</p>', 401);
 
