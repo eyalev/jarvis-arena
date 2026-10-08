@@ -21,7 +21,7 @@ export interface Env {
   MODEL: string;
 }
 
-export type Workflow = { name: string; title: string; start_url?: string; context?: string; voices?: { user?: string; jarvis?: string }; lines: { text: string; say?: string; expect?: Record<string, string> }[] };
+export type Workflow = { name: string; title: string; keyterms?: string[]; start_url?: string; context?: string; voices?: { user?: string; jarvis?: string }; lines: { text: string; say?: string; expect?: Record<string, string> }[] };
 export const WORKFLOWS: Record<string, Workflow> = Object.fromEntries([qodebaseBrowse, wikiLookup].map((w) => [w.name, w as Workflow]));
 
 const INSTANCE = 'standard-3';                 // 2 vCPU, 8 GiB, 16 GB: Chromium x2 + ffmpeg
@@ -84,10 +84,12 @@ export async function aiHandler(request: Request, env: Env): Promise<Response> {
       return new Response(body, { headers: { 'content-type': 'audio/mpeg' } });
     }
     if (path === '/stt') {
+      // The workflow's own words (product names) help the transcriber, as they would a real user's.
+      const keyterm = (request.headers.get('x-keyterms') || '').split(',').map((k) => k.trim()).filter(Boolean).slice(0, 20).join(' ');
       // Straight to the binding, not through the gateway: AI Gateway refuses a stream body
       // ("does not support ReadableStreams yet", 2026-10-08) and nova-3 accepts nothing else.
       // Bounded anyway: one call per user line, runs capped at 2 at a time and 12 minutes.
-      const raw: any = await env.AI.run(PRICES.stt.model as never, { audio: { body: request.body, contentType: request.headers.get('content-type') || 'audio/mpeg' }, language: 'en', smart_format: true } as never);
+      const raw: any = await env.AI.run(PRICES.stt.model as never, { audio: { body: request.body, contentType: request.headers.get('content-type') || 'audio/mpeg' }, language: 'en', smart_format: true, ...(keyterm ? { keyterm } : {}) } as never);
       const text = raw?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? raw?.text ?? '';
       log('ai_stt', { ms: Date.now() - t0, chars: text.length, ...(text ? {} : { raw: JSON.stringify(raw).slice(0, 300) }) });
       return Response.json({ text });

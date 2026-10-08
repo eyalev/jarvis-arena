@@ -48,8 +48,10 @@ async function tts(text, speaker, file) {
   usage.tts_chars += text.length;
   return probe(file);
 }
+let keyterms = '';
 async function stt(file, seconds) {
-  const r = await ai('/stt', readFileSync(file), 'audio/mpeg');
+  const r = await fetch(`${AI}/stt`, { method: 'POST', body: readFileSync(file), headers: { 'content-type': 'audio/mpeg', 'x-keyterms': keyterms, ...(AI_TOKEN ? { 'x-arena-token': AI_TOKEN } : {}) } });
+  if (!r.ok) throw new Error(`ai /stt: HTTP ${r.status} ${(await r.text()).slice(0, 300)}`);
   usage.stt_seconds += seconds;
   return (await r.json()).text || '';
 }
@@ -195,7 +197,18 @@ Rules:
 - Never say you did something you did not do. If a tool failed, say so plainly.
 - If you are not sure what they meant, do the most likely thing and say what you did.
 - Use as few tools as you can: usually one action, then answer. Only read the page when the question needs what is on it.
-- Never put web addresses, links or parentheses in your answer.`;
+- Never put web addresses, links or parentheses in your answer.
+- Never read code, lists or long text aloud: say in a sentence what it is and that it is on the screen.`;
+
+// Spoken answers stay short: whole sentences up to ~260 characters (a voice reading a page aloud
+// is useless and Aura bills per character: one 3,000-character answer cost $0.09 on 2026-10-08).
+const MAX_SPOKEN = 260;
+function shorten(t) {
+  if (t.length <= MAX_SPOKEN) return t;
+  let out = '';
+  for (const s of t.match(/[^.!?]+[.!?]+/g) || []) { if ((out + s).length > MAX_SPOKEN) break; out += s; }
+  return (out || t.slice(0, MAX_SPOKEN).replace(/\s+\S*$/, '') + '…').trim();
+}
 
 /** What gets spoken: no markdown, links, addresses or line breaks. */
 const speakable = (t) => String(t || '').replace(/<think>[\s\S]*?<\/think>/g, '')
@@ -217,6 +230,7 @@ async function runScene(id, wf) {
   rmSync(dir, { recursive: true, force: true }); mkdirSync(`${dir}/audio`, { recursive: true });
   state = { status: 'starting', id, workflow: wf.name, turns: [], startedAt: new Date().toISOString() };
   const lines = wf.lines || [];
+  keyterms = (wf.keyterms || []).join(',');
   const userVoice = wf.voices?.user || 'arcas', jarvisVoice = wf.voices?.jarvis || 'draco';
 
   // Every user line is made before recording starts, so the video has no gaps for it.
@@ -291,14 +305,16 @@ async function runScene(id, wf) {
       reply = speakable(last.content) || "Sorry, I couldn't finish that.";
       turn.out_of_steps = true;
     }
+    if (reply.length > MAX_SPOKEN) { turn.reply_full = reply; reply = shorten(reply); }
     turn.reply = reply;
     const rf = `${dir}/audio/jarvis-${i}.mp3`;
-    const rs = await tts(reply, jarvisVoice, rf);
+    const rs = await tts(reply, jarvisVoice, rf).catch((e) => { log('tts_failed', { id, turn: i + 1, error: String(e) }); return 0; });
     turn.latency = Math.round((Date.now() - tEnd) / 100) / 10;
     await P(`jarvis(${JSON.stringify(reply)})`);
     await P(`status('speaking', 'Speaking…')`);
-    audio.push({ file: rf, at: at() });
-    await sleep(rs * 1000 + 200);
+    // A clip ffprobe cannot read would break the final mix: leave it out and say so in the log.
+    if (rs > 0) audio.push({ file: rf, at: at() }); else log('reply_unvoiced', { id, turn: i + 1 });
+    await sleep(Math.max(rs, 1.5) * 1000 + 200);
 
     const url = await world.eval('location.href').catch(() => '');
     const text = l.expect?.page_includes ? await world.eval('document.body.innerText').catch(() => '') : '';
