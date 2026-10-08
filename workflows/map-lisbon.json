@@ -1,0 +1,14 @@
+{
+  "name": "map-lisbon",
+  "title": "A map of Lisbon, then a closer look",
+  "start_url": "about:blank",
+  "context": "Use OpenStreetMap for maps. To find a place, open https://www.openstreetmap.org/search?query=<place>, then click the first result to center the map on it.",
+  "keyterms": ["Lisbon", "Belém", "OpenStreetMap", "Jarvis"],
+  "voices": { "user": "arcas", "jarvis": "draco" },
+  "lines": [
+    { "text": "Show me a map of Lisbon.", "expect": { "url_includes": "openstreetmap.org" } },
+    { "text": "Now find the Belém Tower.", "expect": { "url_includes": "Bel" } },
+    { "text": "Which river is it on?", "expect": { "reply_matches": "Tagus|Tejo" } },
+    { "text": "Thanks, Jarvis." }
+  ]
+}

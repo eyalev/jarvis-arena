@@ -18,7 +18,13 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { readFileSync, existsSync, mkdirSync, writeFileSync, statSync, createReadStream, rmSync } from 'node:fs';
 
-const PORT = 8080, W = 1920, H = 1080, PHONE_W = 480;
+const PORT = 8080;
+// Two screen layouts. vertical (default): 1080x1920 for phones — the browser on top in a
+// mobile-width window at 2x, the conversation below. wide: 1920x1080 — conversation left.
+const LAYOUTS = {
+  vertical: { W: 1080, H: 1920, dsf: 2, phone: { x: 0, y: 1240, w: 1080, h: 680 }, world: { x: 0, y: 0, w: 1080, h: 1240, app: true } },
+  wide: { W: 1920, H: 1080, dsf: 1, phone: { x: 0, y: 0, w: 480, h: 1080 }, world: { x: 480, y: 0, w: 1440, h: 1080, app: false } },
+};
 const AI = process.env.AI_BASE || 'http://ai.arena';
 const AI_TOKEN = process.env.AI_TOKEN || '';
 const WORK = process.env.WORK || '/work';
@@ -87,10 +93,10 @@ async function until(fn, ms, what) {
   while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch {} await sleep(150); }
   throw new Error(`timed out waiting for ${what}`);
 }
-function chromium(port, dir, args) {
+function chromium(port, dir, args, dsf = 1) {
   return run('chromium', ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
-    '--disable-features=Translate,MediaRouter,OptimizationHints', '--password-store=basic', '--force-device-scale-factor=1',
-    '--disable-session-crashed-bubble', '--test-type', '--disable-infobars', '--hide-crash-restore-bubble', '--lang=en-US',
+    '--disable-features=Translate,MediaRouter,OptimizationHints', '--password-store=basic', `--force-device-scale-factor=${dsf}`,
+    '--disable-session-crashed-bubble', '--hide-scrollbars', '--test-type', '--disable-infobars', '--hide-crash-restore-bubble', '--lang=en-US',
     `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, ...args]);
 }
 
@@ -224,7 +230,9 @@ function check(expect, reply, url, pageText) {
   return { pass: fails.length === 0, why: fails.join('; ') || 'as expected' };
 }
 
-async function runScene(id, wf) {
+async function runScene(id, wf, layoutName = 'vertical') {
+  const L = LAYOUTS[layoutName] || LAYOUTS.vertical;
+  const { W, H } = L;
   const t0wall = Date.now();
   const dir = `${WORK}/${id}`;
   rmSync(dir, { recursive: true, force: true }); mkdirSync(`${dir}/audio`, { recursive: true });
@@ -241,10 +249,15 @@ async function runScene(id, wf) {
   }
   log('user_lines_ready', { id, n: said.length, ms: Date.now() - t0wall });
 
+  // A display left over from an earlier scene in this container would make Xvfb refuse :99.
+  rmSync('/tmp/.X99-lock', { force: true }); rmSync('/tmp/.X11-unix/X99', { force: true });
   run('Xvfb', [':99', '-screen', '0', `${W}x${H}x24`, '-nolisten', 'tcp']);
   await until(() => existsSync('/tmp/.X11-unix/X99'), 8000, 'Xvfb');
-  chromium(19223, `${dir}/chrome-phone`, [`--app=http://127.0.0.1:${PORT}/phone`, '--window-position=0,0', `--window-size=${PHONE_W},${H}`]);
-  chromium(19222, `${dir}/chrome-world`, [`--window-position=${PHONE_W},0`, `--window-size=${W - PHONE_W},${H}`, wf.start_url || 'about:blank']);
+  // Chromium reads window position and size in device-independent pixels: at 2x, half the screen pixels.
+  const pos = (b) => [`--window-position=${b.x / L.dsf},${b.y / L.dsf}`, `--window-size=${b.w / L.dsf},${b.h / L.dsf}`];
+  chromium(19223, `${dir}/chrome-phone`, [`--app=http://127.0.0.1:${PORT}/phone?layout=${layoutName}`, ...pos(L.phone)], L.dsf);
+  // Vertical: an app window (no toolbar; the conversation pane names the site instead).
+  chromium(19222, `${dir}/chrome-world`, [...pos(L.world), L.world.app ? `--app=${wf.start_url && wf.start_url !== 'about:blank' ? wf.start_url : `http://127.0.0.1:${PORT}/blank`}` : (wf.start_url || 'about:blank')], L.dsf);
   const phone = await Tab.open(19223), world = await Tab.open(19222);
   await until(() => phone.eval('!!window.scene'), 10000, 'phone page').catch(async (e) => {
     log('phone_not_ready', { href: await phone.eval('location.href').catch((x) => String(x)), targets: await (await fetch('http://127.0.0.1:19223/json')).json().then((a) => a.map((x) => `${x.type} ${x.url}`)).catch((x) => String(x)) });
@@ -294,6 +307,7 @@ async function runScene(id, wf) {
         const out = await tool(world, c.function.name, args).catch((e) => ({ ok: false, error: String(e.message || e) }));
         turn.tools.push({ name: c.function.name, args, ok: out.ok !== false, error: out.error });
         if (out.say) await P(`action(${JSON.stringify(out.say)})`);
+        if (out.url) await P(`site(${JSON.stringify(out.url)})`);
         log('tool', { id, turn: i + 1, name: c.function.name, args, ok: out.ok !== false, error: out.error });
         const { say, ...rest } = out;
         messages.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(rest).slice(0, 4000) });
@@ -346,8 +360,10 @@ async function runScene(id, wf) {
     let e = ''; p.stderr.on('data', (d) => (e += d)); p.on('close', (c) => (c ? rej(new Error(`mux failed: ${e.slice(-400)}`)) : res()));
   });
   const seconds = await probe(`${dir}/out.mp4`);
+  // The poster: one frame from just past the middle, where Jarvis is usually mid-task.
+  await new Promise((res) => spawn('ffmpeg', ['-nostdin', '-loglevel', 'error', '-y', '-ss', String(Math.max(1, seconds * 0.55)), '-i', `${dir}/out.mp4`, '-frames:v', '1', '-vf', `scale=${L.W === 1080 ? 540 : 960}:-2`, '-q:v', '4', `${dir}/poster.jpg`]).on('close', res));
   for (const p of procs.splice(0)) { try { p.kill('SIGKILL'); } catch {} }
-  state = { ...state, status: 'done', video: `${dir}/out.mp4`, videoBytes: statSync(`${dir}/out.mp4`).size, videoSeconds: seconds, usage: { ...usage }, sceneSeconds: (Date.now() - t0wall) / 1000,
+  state = { ...state, status: 'done', video: `${dir}/out.mp4`, videoBytes: statSync(`${dir}/out.mp4`).size, videoSeconds: seconds, layout: layoutName, poster: existsSync(`${dir}/poster.jpg`) ? `${dir}/poster.jpg` : null, usage: { ...usage }, sceneSeconds: (Date.now() - t0wall) / 1000,
     passed: verdicts.filter((v) => v.pass).length, checks: verdicts.length, finishedAt: new Date().toISOString() };
   log('scene_done', { id, seconds, bytes: state.videoBytes, usage, passed: state.passed, checks: state.checks });
 }
@@ -359,8 +375,14 @@ http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/health') return json(res, 200, { ok: true, status: state.status });
+    if (url.pathname === '/blank') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<!doctype html><title>New tab</title><body style="margin:0;background:#fff">'); }
     if (url.pathname === '/phone') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(readFileSync(`${DIR}phone.html`)); }
     if (url.pathname === '/status') return json(res, 200, { ...state, events: events.slice(-60) });
+    if (url.pathname === '/poster') {
+      if (state.status !== 'done' || !state.poster) return json(res, 404, { error: 'no poster' });
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': statSync(state.poster).size });
+      return createReadStream(state.poster).pipe(res);
+    }
     if (url.pathname === '/video') {
       if (state.status !== 'done') return json(res, 409, { error: `no video yet (${state.status})` });
       res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': statSync(state.video).size });
@@ -369,9 +391,9 @@ http.createServer(async (req, res) => {
     if (url.pathname === '/run' && req.method === 'POST') {
       if (['starting', 'running', 'encoding'].includes(state.status)) return json(res, 409, { error: `busy (${state.status})` });
       let body = ''; for await (const c of req) body += c;
-      const { id, workflow } = JSON.parse(body);
+      const { id, workflow, layout } = JSON.parse(body);
       Object.assign(usage, { chat_in: 0, chat_out: 0, chat_calls: 0, tts_chars: 0, stt_seconds: 0 });
-      runScene(String(id || Date.now()), workflow).catch((e) => {
+      runScene(String(id || Date.now()), workflow, layout || workflow.layout || 'vertical').catch((e) => {
         for (const p of procs.splice(0)) { try { p.kill('SIGKILL'); } catch {} }
         state = { ...state, status: 'error', error: String(e.stack || e), usage: { ...usage } };
         log('scene_failed', { id, error: String(e.stack || e) });

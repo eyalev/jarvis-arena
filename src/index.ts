@@ -9,6 +9,7 @@
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import qodebaseBrowse from '../workflows/qodebase-browse.json';
 import wikiLookup from '../workflows/wiki-lookup.json';
+import mapLisbon from '../workflows/map-lisbon.json';
 import { renderHome, renderRun, renderAbout, renderPrivacy, renderFeedback, renderNotFound, ORIGIN } from './pages';
 import { admin } from './access';
 import { submitFeedback, kstats, ownPath, ROBOTS } from './site';
@@ -31,7 +32,7 @@ export interface Env {
 }
 
 export type Workflow = { name: string; title: string; keyterms?: string[]; start_url?: string; context?: string; voices?: { user?: string; jarvis?: string }; lines: { text: string; say?: string; expect?: Record<string, string> }[] };
-export const WORKFLOWS: Record<string, Workflow> = Object.fromEntries([qodebaseBrowse, wikiLookup].map((w) => [w.name, w as Workflow]));
+export const WORKFLOWS: Record<string, Workflow> = Object.fromEntries([wikiLookup, mapLisbon, qodebaseBrowse].map((w) => [w.name, w as Workflow]));
 
 const INSTANCE = 'standard-3';                 // 2 vCPU, 8 GiB, 16 GB: Chromium x2 + ffmpeg
 const RUN_LIMIT_MS = 12 * 60_000;
@@ -120,14 +121,14 @@ export class ArenaOutbound extends WorkerEntrypoint<Env> {
 
 /* ---------------- one run ---------------- */
 
-type RunState = { id: string; workflow: Workflow; phase: 'starting' | 'posted' | 'finishing' | 'done' | 'error'; startedAt: number; containerStartedAt?: number; lastStatus?: string };
+type RunState = { id: string; workflow: Workflow; layout: string; phase: 'starting' | 'posted' | 'finishing' | 'done' | 'error'; startedAt: number; containerStartedAt?: number; lastStatus?: string };
 
 export class Run extends DurableObject<Env> {
   private get c() { return this.ctx.container!; }
   private port() { return this.c.getTcpPort(8080); }
 
-  async start(id: string, workflow: Workflow) {
-    const st: RunState = { id, workflow, phase: 'starting', startedAt: Date.now() };
+  async start(id: string, workflow: Workflow, layout = 'vertical') {
+    const st: RunState = { id, workflow, layout, phase: 'starting', startedAt: Date.now() };
     await this.ctx.storage.put('run', st);
     if (!this.c.running) {
       this.c.start({ image: (this.c as any).images.stage, instance: INSTANCE, enableInternet: true } as never);
@@ -159,7 +160,7 @@ export class Run extends DurableObject<Env> {
       if (st.phase === 'starting') {
         const h = await this.port().fetch('http://container/health', { signal: AbortSignal.timeout(3000) }).catch(() => null);
         if (!h?.ok) return again(1500);
-        const r = await this.port().fetch('http://container/run', { method: 'POST', body: JSON.stringify({ id: st.id, workflow: st.workflow }) });
+        const r = await this.port().fetch('http://container/run', { method: 'POST', body: JSON.stringify({ id: st.id, workflow: st.workflow, layout: st.layout }) });
         if (r.status !== 202) return this.#finish(st, 'error', { error: `stage refused the run: ${r.status} ${await r.text()}` });
         st.phase = 'posted'; await this.ctx.storage.put('run', st);
         await this.env.DB.prepare(`UPDATE runs SET status = 'running', started_at = ? WHERE id = ?`).bind(new Date().toISOString(), st.id).run();
@@ -175,7 +176,12 @@ export class Run extends DurableObject<Env> {
         const len = Number(v.headers.get('content-length') || 0);
         // R2 needs a known length for a stream; the stage sends content-length.
         await this.env.VIDEOS.put(key, len ? v.body.pipeThrough(new FixedLengthStream(len)) : await v.arrayBuffer(), { httpMetadata: { contentType: 'video/mp4' } });
-        return this.#finish(st, 'done', { stage: s, video_key: key });
+        // The poster frame (best effort: a run without one still shows, with a plain card).
+        let poster_key: string | undefined;
+        const pr = await this.port().fetch('http://container/poster').catch(() => null);
+        if (pr?.ok) { poster_key = `runs/${st.id}.jpg`; await this.env.VIDEOS.put(poster_key, await pr.arrayBuffer(), { httpMetadata: { contentType: 'image/jpeg' } }); }
+        else log('poster_missing', { id: st.id, status: pr?.status ?? null });
+        return this.#finish(st, 'done', { stage: s, video_key: key, poster_key });
       }
       if (s.status === 'error') return this.#finish(st, 'error', { error: s.error, stage: s });
       return again(3000);
@@ -185,14 +191,14 @@ export class Run extends DurableObject<Env> {
     }
   }
 
-  async #finish(st: RunState, phase: 'done' | 'error', r: { error?: string; stage?: Record<string, any>; video_key?: string }) {
+  async #finish(st: RunState, phase: 'done' | 'error', r: { error?: string; stage?: Record<string, any>; video_key?: string; poster_key?: string }) {
     const secs = st.containerStartedAt ? (Date.now() - st.containerStartedAt) / 1000 : 0;
     try { if (this.c.running) await this.c.destroy(); } catch (e) { log('destroy_failed', { id: st.id, error: String(e) }); }
     st.phase = phase; await this.ctx.storage.put('run', st);
     const c = cost(secs, r.stage?.usage);
     const result = { turns: r.stage?.turns ?? [], usage: r.stage?.usage ?? null, passed: r.stage?.passed ?? null, checks: r.stage?.checks ?? null, video_seconds: r.stage?.videoSeconds ?? null, container_seconds: Math.round(secs), cost: c, error: r.error ?? null, events: phase === 'error' ? r.stage?.events ?? null : null };
-    await this.env.DB.prepare(`UPDATE runs SET status = ?, finished_at = ?, result = ?, cost_usd = ?, video_key = ? WHERE id = ?`)
-      .bind(phase, new Date().toISOString(), JSON.stringify(result), c.total_usd, r.video_key ?? null, st.id).run();
+    await this.env.DB.prepare(`UPDATE runs SET status = ?, finished_at = ?, result = ?, cost_usd = ?, video_key = ?, poster_key = ?, layout = ? WHERE id = ?`)
+      .bind(phase, new Date().toISOString(), JSON.stringify(result), c.total_usd, r.video_key ?? null, r.poster_key ?? null, st.layout, st.id).run();
     log('run_finished', { id: st.id, phase, container_seconds: Math.round(secs), cost_usd: c.total_usd, passed: result.passed, checks: result.checks, error: r.error });
   }
 }
@@ -215,7 +221,7 @@ async function memo(request: Request, ctx: ExecutionContext, ttl: number, render
   return res;
 }
 
-const RUN_LIST = `SELECT id, workflow, status, created_at, finished_at, cost_usd, result FROM runs ORDER BY created_at DESC LIMIT 30`;
+const RUN_LIST = `SELECT id, workflow, status, created_at, finished_at, cost_usd, result, layout, poster_key, video_key, votes FROM runs ORDER BY created_at DESC LIMIT 30`;
 
 async function health(env: Env) {
   const checks: { id: string; label: string; status: string; detail: string; at: string }[] = [];
@@ -229,6 +235,35 @@ async function health(env: Env) {
     checks.push({ id: 'db', label: 'Database', status: 'unknown', detail: `could not read: ${String(e).slice(0, 120)}`, at });
   }
   return { sha: env.CF_VERSION_METADATA?.tag || null, built: env.CF_VERSION_METADATA?.timestamp || null, checks };
+}
+
+/**
+ * One vote per browser per run: a random id in a first-party cookie (`aid`), set here on the
+ * first vote. {run, up} toggles it; the count lives on the run row so lists read no extra rows.
+ * At most 60 votes per browser a day. Not identity, just enough to keep counts honest-ish.
+ */
+async function vote(request: Request, env: Env) {
+  let body: { run?: string; up?: boolean };
+  try { body = await request.json(); } catch { return Response.json({ error: 'bad body' }, { status: 400 }); }
+  const run = String(body.run || '');
+  if (!/^[\w-]{6,40}$/.test(run)) return Response.json({ error: 'bad run' }, { status: 400 });
+  let aid = /(?:^|;\s*)aid=([\w-]{16,64})/.exec(request.headers.get('cookie') || '')?.[1];
+  const fresh = !aid;
+  if (!aid) aid = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const today = await env.DB.prepare(`SELECT COUNT(*) AS n FROM votes WHERE voter = ? AND created_at > ?`).bind(aid, new Date(Date.now() - 86400e3).toISOString()).first<{ n: number }>();
+  if (body.up !== false && (today?.n ?? 0) >= 60) return Response.json({ error: 'too many votes today' }, { status: 429 });
+  const exists = await env.DB.prepare(`SELECT 1 FROM runs WHERE id = ? AND status = 'done'`).bind(run).first();
+  if (!exists) return Response.json({ error: 'no such run' }, { status: 404 });
+  const res = body.up === false
+    ? await env.DB.prepare(`DELETE FROM votes WHERE run_id = ? AND voter = ?`).bind(run, aid).run()
+    : await env.DB.prepare(`INSERT OR IGNORE INTO votes (run_id, voter, created_at) VALUES (?, ?, ?)`).bind(run, aid, now).run();
+  if (res.meta.changes) await env.DB.prepare(`UPDATE runs SET votes = MAX(0, votes + ?) WHERE id = ?`).bind(body.up === false ? -1 : 1, run).run();
+  const row = await env.DB.prepare(`SELECT votes FROM runs WHERE id = ?`).bind(run).first<{ votes: number }>();
+  log('vote', { run, up: body.up !== false, changed: res.meta.changes, votes: row?.votes });
+  const h = new Headers({ 'cache-control': 'no-store' });
+  if (fresh) h.set('set-cookie', `aid=${aid}; Path=/; Secure; SameSite=Lax; HttpOnly; Max-Age=63072000`);
+  return Response.json({ run, votes: row?.votes ?? 0, up: body.up !== false }, { headers: h });
 }
 
 export default {
@@ -252,6 +287,13 @@ export default {
       const done = !['queued', 'running'].includes(String(row.status));
       return html(renderRun(row as Record<string, unknown>, WORKFLOWS[String(row.workflow)]), 200, done ? 'public, max-age=300' : 'no-store');
     }
+    m = /^\/poster\/([\w-]+)\.jpg$/.exec(p);
+    if (m) {
+      const obj = await env.VIDEOS.get(`runs/${m[1]}.jpg`);
+      if (!obj) return new Response('not found', { status: 404 });
+      return new Response(obj.body, { headers: { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=604800, immutable' } });
+    }
+    if (p === '/api/vote' && request.method === 'POST') return vote(request, env);
     m = /^\/video\/([\w-]+)\.mp4$/.exec(p);
     if (m) {
       const range = request.headers.get('range');
@@ -308,14 +350,15 @@ export default {
         const { results } = await env.DB.prepare(RUN_LIST).all();
         return html(renderHome(Object.values(WORKFLOWS), results as Record<string, unknown>[], who));
       }
-      const { workflow } = (await request.json()) as { workflow: string };
+      const { workflow, layout: lay } = (await request.json()) as { workflow: string; layout?: string };
+      const layout = lay === 'wide' ? 'wide' : 'vertical';
       const wf = WORKFLOWS[workflow];
       if (!wf) return Response.json({ error: `unknown workflow ${workflow}` }, { status: 404 });
       const busy = await env.DB.prepare(`SELECT COUNT(*) AS n FROM runs WHERE status IN ('queued','running') AND created_at > ?`).bind(new Date(Date.now() - RUN_LIMIT_MS).toISOString()).first<{ n: number }>();
       if ((busy?.n ?? 0) >= 2) return Response.json({ error: 'two runs are already going; wait for one to finish' }, { status: 429 });
       const id = `${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '')}-${crypto.randomUUID().slice(0, 6)}`;
-      await env.DB.prepare(`INSERT INTO runs (id, workflow, status, created_at, model) VALUES (?, ?, 'queued', ?, ?)`).bind(id, wf.name, new Date().toISOString(), env.MODEL).run();
-      await env.RUN.get(env.RUN.idFromName(id)).start(id, wf);
+      await env.DB.prepare(`INSERT INTO runs (id, workflow, status, created_at, model, layout) VALUES (?, ?, 'queued', ?, ?, ?)`).bind(id, wf.name, new Date().toISOString(), env.MODEL, layout).run();
+      await env.RUN.get(env.RUN.idFromName(id)).start(id, wf, layout);
       log('run_requested', { id, workflow: wf.name, by: who });
       return Response.json({ id, url: `/runs/${id}` }, { status: 201 });
     }

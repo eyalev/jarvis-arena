@@ -31,6 +31,26 @@
   footer.thinking .bars i { animation: pulse 1.2s ease-in-out infinite; }
   .bars i:nth-child(2) { animation-delay: .15s !important; } .bars i:nth-child(3) { animation-delay: .3s !important; } .bars i:nth-child(4) { animation-delay: .45s !important; } .bars i:nth-child(5) { animation-delay: .6s !important; }
   #status { font-size: 20px; }
+  /* Vertical recording: this pane is the bottom strip (540x340 CSS px at 2x) under the browser. */
+  body.v { font-size: 17px; }
+  body.v .wrap { grid-template-rows: auto auto 1fr auto; padding: 10px 14px 12px; gap: 8px; box-shadow: inset 0 1px 0 var(--line); }
+  body.v header { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  body.v header .app { font-size: 17px; gap: 7px; flex: none; }
+  body.v header .dot { width: 10px; height: 10px; border-radius: 3px; }
+  body.v header .title { margin: 0; font-size: 13px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.v header .turn { margin: 0; font-size: 13px; flex: none; }
+  body.v #site { display: block; }
+  body.v #log { gap: 8px; }
+  body.v .msg { padding: 7px 11px; border-radius: 12px; max-width: 94%; }
+  body.v .msg .who { font-size: 11px; }
+  body.v .msg .heard { font-size: 12px; }
+  body.v .act { font-size: 12px; padding: 0 2px; }
+  body.v footer { min-height: 40px; border-radius: 12px; padding: 0 12px; gap: 10px; }
+  body.v .bars { height: 20px; gap: 3px; } body.v .bars i { width: 4px; }
+  body.v #status { font-size: 14px; }
+  #site { display: none; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.v footer.listening .bars i, body.v footer.speaking .bars i { animation-name: barv; }
+  @keyframes barv { 0%, 100% { height: 5px; } 50% { height: 18px; } }
   @keyframes bar { 0%, 100% { height: 8px; } 50% { height: 30px; } }
   @keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
   @keyframes in { from { transform: translateY(6px); opacity: 0; } }
@@ -43,11 +63,13 @@
     <div class="title" id="title"></div>
     <div class="turn" id="turn"></div>
   </header>
+  <div id="site"></div>
   <div id="log"></div>
   <footer id="foot"><div class="bars"><i></i><i></i><i></i><i></i><i></i></div><div id="status">Ready</div></footer>
 </div>
 <script>
   const $ = (id) => document.getElementById(id);
+  if (new URLSearchParams(location.search).get('layout') === 'vertical') document.body.classList.add('v');
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   // Older messages scroll off the top (flex-end + overflow hidden clips them); keep the DOM small.
   const add = (html, cls) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; $('log').append(d); while ($('log').children.length > 30) $('log').firstElementChild.remove(); return d; };
@@ -58,6 +80,7 @@
     user(text) { return add(`<div class="who">You</div>${esc(text)}`, 'msg you'); },
     heard(text) { const last = [...document.querySelectorAll('.msg.you')].at(-1); if (last && text) last.insertAdjacentHTML('beforeend', `<div class="heard">Heard: "${esc(text)}"</div>`); },
     jarvis(text) { return add(`<div class="who">Jarvis</div>${esc(text)}`, 'msg jarvis'); },
+    site(url) { try { const u = new URL(url); $('site').textContent = 'On ' + u.hostname.replace(/^www\./, '') + (u.pathname.length > 1 ? u.pathname : ''); } catch {} },
     action(text) { return add(`<b>${esc(text)}</b>`, 'act'); },
     verdict(ok, text) { return add(`<b>${ok ? 'Pass' : 'Miss'}</b> ${esc(text)}`, `act ${ok ? 'ok' : 'bad'}`); },
   };
