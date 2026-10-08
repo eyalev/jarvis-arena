@@ -24,7 +24,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .top nav { display: flex; gap: 4px; }
 .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; color: var(--dim); text-decoration: none; font-weight: 500; }
 .display, h1, h2 { font-family: "Bricolage Grotesque", Georgia, serif; font-stretch: 75%; letter-spacing: 0; text-wrap: balance; }
-h1 { font-size: 44px; line-height: .98; font-weight: 800; margin: 18px 0 10px; }
+h1 { font-size: 40px; line-height: .98; font-weight: 800; margin: 12px 0 8px; }
 h2 { font-size: 26px; line-height: 1.05; font-weight: 700; margin: 40px 0 12px; }
 p { text-wrap: pretty; }
 a { color: var(--accent); text-underline-offset: 3px; }
@@ -47,16 +47,17 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
 .vote[aria-pressed="true"] { background: var(--accent); color: #fff; }
 
 /* ---- the reel ---- */
-.reel-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 28px 0 12px; }
+.reel-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 20px 0 12px; }
 .reel-head h2 { margin: 0; }
 .reel-nav { display: none; gap: 8px; }
 .reel-nav button { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--surface); cursor: pointer; display: grid; place-items: center; }
 .reel-nav svg { width: 18px; height: 18px; }
 .reel { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-left: 16px; padding: 0 16px 6px; margin: 0 -16px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .reel::-webkit-scrollbar { display: none; }
-.card { position: relative; flex: none; width: min(76vw, 340px); aspect-ratio: 9 / 16; border-radius: 18px; overflow: hidden; background: var(--stage); scroll-snap-align: start; isolation: isolate; color: #f2f3f5; }
-.card video, .card img.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.card.wide video, .card.wide img.poster { object-fit: contain; }
+.card { flex: none; width: min(72vw, calc(60svh * 9 / 16), 320px); scroll-snap-align: start; }
+.card .media { position: relative; aspect-ratio: 9 / 16; border-radius: 18px; overflow: hidden; background: var(--stage); isolation: isolate; color: #f2f3f5; }
+.card .media video, .card .media img.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.card.wide .media video, .card.wide .media img.poster { object-fit: contain; }
 .card .tap { position: absolute; inset: 0; z-index: 1; border: 0; background: none; cursor: pointer; }
 .card .hud { position: absolute; left: 0; right: 0; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: start; padding: 10px; pointer-events: none; }
 .card .hud > * { pointer-events: auto; }
@@ -64,10 +65,10 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
 .chip .score { color: #f2f3f5; } .chip .score.all { color: #3ddc97; } .chip .score.some { color: #ff5c6c; }
 .card .vote { background: rgb(8 9 11 / .72); backdrop-filter: blur(8px); color: #f2f3f5; }
 .card .vote[aria-pressed="true"] { background: #ff5c2b; }
-.card .info { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 56px 14px 12px; background: linear-gradient(to top, rgb(8 9 11 / .94), rgb(8 9 11 / .7) 55%, transparent); }
-.card .info a { color: #f2f3f5; text-decoration: none; display: block; font-weight: 500; line-height: 1.3; min-height: 44px; }
-.card .meta { display: flex; gap: 12px; margin-top: 2px; font-size: 13px; color: #b4bac3; font-variant-numeric: tabular-nums; }
-.card .sound { position: absolute; z-index: 2; right: 10px; bottom: 92px; width: 44px; height: 44px; border-radius: 12px; border: 0; background: rgb(8 9 11 / .72); color: #f2f3f5; display: grid; place-items: center; cursor: pointer; }
+.card .info { padding: 10px 2px 0; }
+.card .info a { color: var(--fg); text-decoration: none; display: block; font-weight: 500; line-height: 1.3; }
+.card .meta { display: flex; gap: 12px; margin-top: 2px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.card .sound { position: absolute; z-index: 2; right: 10px; bottom: 12px; width: 44px; height: 44px; border-radius: 12px; border: 0; background: rgb(8 9 11 / .72); color: #f2f3f5; display: grid; place-items: center; cursor: pointer; }
 .card .sound svg { width: 20px; height: 20px; }
 .card .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; z-index: 3; background: rgb(255 255 255 / .18); }
 .card .bar i { display: block; height: 100%; width: 0; background: #ff5c2b; }
@@ -198,7 +199,7 @@ const REEL_JS = `(() => {
   const dots = [...document.querySelectorAll('.dots i')];
   let sound = false, current = null;
   const setSoundIcons = () => cards.forEach((c) => { const b = c.querySelector('.sound'); if (b) { b.innerHTML = sound ? ${JSON.stringify(ICON.sound)} : ${JSON.stringify(ICON.muted)}; b.setAttribute('aria-label', sound ? 'Mute' : 'Turn sound on'); } });
-  const vid = (c) => { let v = c.querySelector('video'); if (!v) { v = document.createElement('video'); v.muted = true; v.playsInline = true; v.loop = true; v.preload = 'auto'; v.poster = c.dataset.poster || ''; v.src = c.dataset.src; c.prepend(v);
+  const vid = (c) => { let v = c.querySelector('video'); if (!v) { v = document.createElement('video'); v.muted = true; v.playsInline = true; v.loop = true; v.preload = 'auto'; v.poster = c.dataset.poster || ''; v.src = c.dataset.src; c.querySelector('.media').prepend(v);
       const bar = c.querySelector('.bar i'); v.addEventListener('timeupdate', () => { if (v.duration) bar.style.width = (v.currentTime / v.duration * 100) + '%'; }); } return v; };
   const activate = (c) => {
     if (current === c) return; current = c;
@@ -224,7 +225,9 @@ const REEL_JS = `(() => {
 })();`;
 
 export function renderHome(workflows: Workflow[], runs: Record<string, unknown>[], admin: string | null) {
-  const watchable = runs.filter((r) => r.status === 'done' && r.video_key);
+  // The reel is for watching what Jarvis can do: runs that passed at least half their checks.
+  // Everything else stays in the list below.
+  const watchable = runs.filter((r) => { if (r.status !== 'done' || !r.video_key) return false; const x = result(r); return !x.checks || x.passed / x.checks >= 0.5; });
   const vertical = watchable.filter((r) => r.layout === 'vertical');
   // The reel: vertical recordings first (they fill a phone), best voted first, then newest.
   const byVotes = (a: Record<string, unknown>, b: Record<string, unknown>) => (Number(b.votes) || 0) - (Number(a.votes) || 0) || String(b.created_at).localeCompare(String(a.created_at));
@@ -232,13 +235,15 @@ export function renderHome(workflows: Workflow[], runs: Record<string, unknown>[
   const card = (r: Record<string, unknown>) => {
     const x = result(r);
     return `<article class="card${r.layout === 'vertical' ? '' : ' wide'}" data-src="/video/${esc(r.id)}.mp4" data-poster="${r.poster_key ? `/poster/${esc(r.id)}.jpg` : ''}">
-      ${r.poster_key ? `<img class="poster" src="/poster/${esc(r.id)}.jpg" alt="" loading="lazy" decoding="async">` : ''}
-      <button type="button" class="tap" aria-label="Play ${esc(titleOf(workflows, r))} with sound"></button>
-      <div class="hud"><span class="chip">${score(r, false) || '<span class="small">run</span>'}</span>${voteBtn(r)}</div>
-      <button type="button" class="sound" aria-label="Turn sound on"></button>
+      <div class="media">
+        ${r.poster_key ? `<img class="poster" src="/poster/${esc(r.id)}.jpg" alt="" loading="lazy" decoding="async">` : ''}
+        <button type="button" class="tap" aria-label="Play ${esc(titleOf(workflows, r))} with sound"></button>
+        <div class="hud"><span class="chip">${score(r, false) || '<span class="small">run</span>'}</span>${voteBtn(r)}</div>
+        <button type="button" class="sound" aria-label="Turn sound on"></button>
+        <div class="bar"><i></i></div>
+      </div>
       <div class="info"><a href="/runs/${esc(r.id)}">${esc(titleOf(workflows, r))}</a>
         <div class="meta"><span>${mmss(x.video_seconds)}</span><span>${usd(r.cost_usd)}</span><span>${ago(r.created_at)}</span></div></div>
-      <div class="bar"><i></i></div>
     </article>`;
   };
   const row = (r: Record<string, unknown>) => `<div class="row">
@@ -251,7 +256,7 @@ export function renderHome(workflows: Workflow[], runs: Record<string, unknown>[
   const wfStats = (name: string) => { const d = runs.filter((r) => r.workflow === name && r.status === 'done'); return d.length ? `${d.length} run${d.length > 1 ? 's' : ''}` : 'No runs yet'; };
   return page('Jarvis Arena: watch voice agents do real things', `
     <h1>Voice agents, doing real things.</h1>
-    <p class="lede">Each video is one run: a synthetic voice asks, Jarvis drives a real browser and answers, and every step is checked. Swipe through, tap for sound, vote for the best.</p>
+    <p class="lede">A synthetic voice asks, Jarvis drives a real browser, every step is checked. Swipe, tap for sound, vote.</p>
     ${reelRuns.length ? `<div class="reel-head"><h2>Now showing</h2><div class="reel-nav"><button type="button" data-reel="prev" aria-label="Previous video">${ICON.prev}</button><button type="button" data-reel="next" aria-label="Next video">${ICON.next}</button></div></div>
     <div class="reel" aria-label="Recorded runs">${reelRuns.map(card).join('')}</div>
     <div class="dots" aria-hidden="true">${reelRuns.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>` : '<p class="dim">Nothing has been recorded yet.</p>'}
