@@ -35,8 +35,10 @@ The video stage (`--stage`) is dark in both themes, like a theater screen.
 
 ## Components
 
-- **Reel card** (9:16): poster until in view, then plays muted; tap toggles sound; score badge
-  top-left, votes top-right, title and duration on a bottom scrim. Next card peeks (78vw).
+- **Reel card** (9:16, vertical recordings only): poster until in view, then plays muted; tap
+  toggles sound. Nothing on the recording but the sound button (the recording has its own UI).
+  Under it: the title (the link into the run), then model, score, duration, cost; the vote button
+  to the right. Next card peeks (84vw). Wide (16:9) runs live in the list only, with 16:9 thumbs.
 - **Score badge:** condensed numerals `4/4`, green when everything passed, red with a miss.
 - **Vote:** an up-triangle and the count; filled accent when it's yours.
 

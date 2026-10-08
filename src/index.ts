@@ -221,7 +221,7 @@ async function memo(request: Request, ctx: ExecutionContext, ttl: number, render
   return res;
 }
 
-const RUN_LIST = `SELECT id, workflow, status, created_at, finished_at, cost_usd, result, layout, poster_key, video_key, votes FROM runs ORDER BY created_at DESC LIMIT 30`;
+const RUN_LIST = `SELECT id, workflow, status, created_at, finished_at, cost_usd, result, layout, poster_key, video_key, votes, model FROM runs ORDER BY created_at DESC LIMIT 30`;
 
 async function health(env: Env) {
   const checks: { id: string; label: string; status: string; detail: string; at: string }[] = [];

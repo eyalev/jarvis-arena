@@ -24,7 +24,7 @@ button { font: inherit; color: inherit; touch-action: manipulation; }
 .top nav { display: flex; gap: 4px; }
 .top nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; color: var(--dim); text-decoration: none; font-weight: 500; }
 .display, h1, h2 { font-family: "Bricolage Grotesque", Georgia, serif; font-stretch: 75%; letter-spacing: 0; text-wrap: balance; }
-h1 { font-size: 40px; line-height: .98; font-weight: 800; margin: 12px 0 8px; }
+h1 { font-size: 32px; line-height: 1; font-weight: 800; margin: 10px 0 6px; }
 h2 { font-size: 26px; line-height: 1.05; font-weight: 700; margin: 40px 0 12px; }
 p { text-wrap: pretty; }
 a { color: var(--accent); text-underline-offset: 3px; }
@@ -32,7 +32,7 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
   -webkit-mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>') center / contain no-repeat;
   mask: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>') center / contain no-repeat; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.lede { color: var(--dim); font-size: 17px; margin: 0; max-width: 34em; }
+.lede { color: var(--dim); font-size: 15px; margin: 0; max-width: 40em; }
 .dim { color: var(--dim); } .small { font-size: 14px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font-weight: 500; cursor: pointer; text-decoration: none; }
 .btn.quiet { background: var(--surface); color: var(--fg); }
@@ -45,16 +45,20 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
 .vote { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 56px; padding: 0 12px; border-radius: 12px; border: 0; background: var(--surface); cursor: pointer; font-variant-numeric: tabular-nums; font-weight: 500; transition: background-color 160ms ease-out, color 160ms ease-out; }
 .vote svg { width: 14px; height: 14px; }
 .vote[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.row .vote, .card .info .vote, .runbar .vote { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+.row .vote[aria-pressed="true"], .card .info .vote[aria-pressed="true"], .runbar .vote[aria-pressed="true"] { background: var(--accent); box-shadow: none; color: #fff; }
+@media (hover: hover) { .vote:hover { color: var(--accent); } .vote[aria-pressed="true"]:hover { color: #fff; } }
 
 /* ---- the reel ---- */
-.reel-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 20px 0 12px; }
+.reel-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 16px 0 10px; }
+.reel-head h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .reel-head h2 { margin: 0; }
 .reel-nav { display: none; gap: 8px; }
 .reel-nav button { width: 44px; height: 44px; border-radius: 12px; border: 0; background: var(--surface); cursor: pointer; display: grid; place-items: center; }
 .reel-nav svg { width: 18px; height: 18px; }
 .reel { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-left: 16px; padding: 0 16px 6px; margin: 0 -16px; scrollbar-width: none; overscroll-behavior-x: contain; }
 .reel::-webkit-scrollbar { display: none; }
-.card { flex: none; width: min(72vw, calc(60svh * 9 / 16), 320px); scroll-snap-align: start; }
+.card { flex: none; width: min(84vw, calc(66svh * 9 / 16), 340px); scroll-snap-align: start; }
 .card .media { position: relative; aspect-ratio: 9 / 16; border-radius: 18px; overflow: hidden; background: var(--stage); isolation: isolate; color: #f2f3f5; }
 .card .media video, .card .media img.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .card.wide .media video, .card.wide .media img.poster { object-fit: contain; }
@@ -65,9 +69,12 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
 .chip .score { color: #f2f3f5; } .chip .score.all { color: #3ddc97; } .chip .score.some { color: #ff5c6c; }
 .card .vote { background: rgb(8 9 11 / .72); backdrop-filter: blur(8px); color: #f2f3f5; }
 .card .vote[aria-pressed="true"] { background: #ff5c2b; }
-.card .info { padding: 10px 2px 0; }
-.card .info a { color: var(--fg); text-decoration: none; display: block; font-weight: 500; line-height: 1.3; }
-.card .meta { display: flex; gap: 12px; margin-top: 2px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.card .info { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px 10px; padding: 10px 2px 0; }
+.card .info a { color: var(--fg); text-decoration: none; display: block; min-height: 44px; padding-top: 2px; }
+.card .info a .t { display: block; font-weight: 500; line-height: 1.3; }
+.card .info .vote { margin-top: 2px; }
+.model { font: 700 15px/1.2 "Bricolage Grotesque", Georgia, serif; font-stretch: 75%; color: var(--fg); }
+.card .meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 2px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .card .sound { position: absolute; z-index: 2; right: 10px; bottom: 12px; width: 44px; height: 44px; border-radius: 12px; border: 0; background: rgb(8 9 11 / .72); color: #f2f3f5; display: grid; place-items: center; cursor: pointer; }
 .card .sound svg { width: 20px; height: 20px; }
 .card .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; z-index: 3; background: rgb(255 255 255 / .18); }
@@ -75,22 +82,23 @@ a[target=_blank]::after { content: ""; display: inline-block; width: .72em; heig
 .dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
 .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--surface-2); transition: width 160ms ease-out, background-color 160ms ease-out; }
 .dots i.on { width: 18px; background: var(--accent); }
-@media (min-width: 760px) { .reel-nav { display: flex; } .card { width: 300px; } .dots { display: none; } h1 { font-size: 64px; } }
+@media (min-width: 760px) { .reel-nav { display: flex; } .reel-head h2 { position: static; width: auto; height: auto; clip-path: none; } .card { width: 300px; } .dots { display: none; } h1 { font-size: 64px; } .lede { font-size: 17px; } }
 
 /* ---- list ---- */
 .list { display: grid; gap: 8px; }
-.row { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 12px; background: var(--surface); }
-.row .thumb { width: 54px; aspect-ratio: 9 / 16; border-radius: 8px; overflow: hidden; background: var(--stage); }
+.row { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 12px; background: var(--surface); }
+.row .thumb { width: 54px; aspect-ratio: 9 / 16; border-radius: 8px; overflow: hidden; background: var(--stage); justify-self: center; }
+.row .thumb.wide { width: 96px; aspect-ratio: 16 / 9; }
 .row .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.row .thumb.wide img { object-fit: contain; }
+.row .thumb.wide img { object-fit: cover; }
 .row a.t { color: var(--fg); text-decoration: none; font-weight: 500; line-height: 1.3; display: block; }
 .row .sub { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .row .sub .score { font-size: 17px; }
 .status-err { color: var(--miss); }
 .how { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
-.how li { padding: 14px 16px; border-radius: 12px; background: var(--surface); }
+.how li { padding: 12px 0; border-top: 1px solid var(--line); }
 .how b { display: block; font: 700 19px/1.1 "Bricolage Grotesque", Georgia, serif; font-stretch: 75%; margin-bottom: 4px; }
-@media (min-width: 760px) { .how { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 760px) { .how { grid-template-columns: repeat(3, 1fr); gap: 0 24px; } }
 .wf { padding: 14px 16px; border-radius: 12px; background: var(--surface); margin-bottom: 8px; }
 .wf ol { padding-left: 20px; margin: 8px 0 0; color: var(--dim); font-size: 14px; }
 
@@ -169,6 +177,8 @@ function score(r: Record<string, unknown>, small = true) {
   return `<span class="score ${cls}" aria-label="${x.passed} of ${x.checks} checks passed">${x.passed}/${x.checks}${small ? '<small>checks</small>' : ''}</span>`;
 }
 const voteBtn = (r: Record<string, unknown>) => `<button type="button" class="vote" data-vote="${esc(r.id)}" aria-pressed="false" aria-label="Vote for this run, ${Number(r.votes) || 0} votes">${ICON.up}<span>${Number(r.votes) || 0}</span></button>`;
+/** "@cf/zai-org/glm-4.7-flash" -> "GLM-4.7 Flash": who ran, so the list reads as contenders. */
+const modelName = (m: unknown) => { const id = String(m || '').split('/').pop() || ''; if (!id) return 'Unknown model'; return id.replace(/^glm-/i, 'GLM-').replace(/-flash$/i, ' Flash').replace(/-instruct$/i, '').replace(/^llama/i, 'Llama'); };
 const titleOf = (workflows: Workflow[], r: Record<string, unknown>) => workflows.find((w) => w.name === r.workflow)?.title || String(r.workflow);
 
 /** Votes: optimistic toggle, remembered on this device; the server keeps one per browser. */
@@ -231,25 +241,24 @@ export function renderHome(workflows: Workflow[], runs: Record<string, unknown>[
   const vertical = watchable.filter((r) => r.layout === 'vertical');
   // The reel: vertical recordings first (they fill a phone), best voted first, then newest.
   const byVotes = (a: Record<string, unknown>, b: Record<string, unknown>) => (Number(b.votes) || 0) - (Number(a.votes) || 0) || String(b.created_at).localeCompare(String(a.created_at));
-  const reelRuns = [...vertical.sort(byVotes), ...watchable.filter((r) => r.layout !== 'vertical').sort(byVotes)].slice(0, 12);
+  const reelRuns = (vertical.length ? vertical : watchable).sort(byVotes).slice(0, 12);
   const card = (r: Record<string, unknown>) => {
     const x = result(r);
     return `<article class="card${r.layout === 'vertical' ? '' : ' wide'}" data-src="/video/${esc(r.id)}.mp4" data-poster="${r.poster_key ? `/poster/${esc(r.id)}.jpg` : ''}">
       <div class="media">
         ${r.poster_key ? `<img class="poster" src="/poster/${esc(r.id)}.jpg" alt="" loading="lazy" decoding="async">` : ''}
         <button type="button" class="tap" aria-label="Play ${esc(titleOf(workflows, r))} with sound"></button>
-        <div class="hud"><span class="chip">${score(r, false) || '<span class="small">run</span>'}</span>${voteBtn(r)}</div>
         <button type="button" class="sound" aria-label="Turn sound on"></button>
         <div class="bar"><i></i></div>
       </div>
-      <div class="info"><a href="/runs/${esc(r.id)}">${esc(titleOf(workflows, r))}</a>
-        <div class="meta"><span>${mmss(x.video_seconds)}</span><span>${usd(r.cost_usd)}</span><span>${ago(r.created_at)}</span></div></div>
+      <div class="info"><a href="/runs/${esc(r.id)}"><span class="t">${esc(titleOf(workflows, r))}</span>
+        <span class="meta"><span class="model">${esc(modelName(r.model))}</span>${score(r, false)}<span>${mmss(x.video_seconds)}</span><span>${usd(r.cost_usd)}</span></span></a>${voteBtn(r)}</div>
     </article>`;
   };
   const row = (r: Record<string, unknown>) => `<div class="row">
       <div class="thumb${r.layout === 'vertical' ? '' : ' wide'}">${r.poster_key ? `<img src="/poster/${esc(r.id)}.jpg" alt="" loading="lazy" decoding="async">` : ''}</div>
       <div><a class="t" href="/runs/${esc(r.id)}">${esc(titleOf(workflows, r))}</a>
-        <div class="sub">${score(r) || (r.status === 'error' ? '<span class="status-err">failed</span>' : `<span>${esc(r.status)}</span>`)}<span>${usd(r.cost_usd)}</span><span>${ago(r.created_at)}</span></div></div>
+        <div class="sub"><span class="model">${esc(modelName(r.model))}</span>${score(r) || (r.status === 'error' ? '<span class="status-err">failed</span>' : `<span>${esc(r.status)}</span>`)}<span>${usd(r.cost_usd)}</span><span>${ago(r.created_at)}</span></div></div>
       ${r.status === 'done' && r.video_key ? voteBtn(r) : '<span></span>'}
     </div>`;
   const ranked = [...runs].sort((a, b) => byVotes(a, b));

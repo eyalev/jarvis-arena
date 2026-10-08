@@ -26,3 +26,12 @@ Defaults chosen: name Jarvis Arena, jarvis-arena.kapps.dev, MIT, public read-onl
 - [x] LICENSE (MIT), README public-ready, CLAUDE.md ## Baseline, secret scan of history (clean)
 - [x] 390 px check script (0 fails) + screenshots light/dark, 1440
 - [x] Repo public (eyalev/jarvis-arena); registered on Workbench + site-doctor
+
+## Video-first redesign (Eyal 2026-10-08: "cool / slick, its own vibe, still simple; previews; easy to tap or swipe between videos; what's voted high")
+- [x] Direction + DESIGN.md (tokens, vibe), inspiration noted
+- [x] Vertical recordings (1080x1920: browser on top at 2x, conversation below) — `layout: vertical`
+- [x] Posters: a frame per run saved to R2 (stage makes it; backfill old runs)
+- [x] Votes: real upvotes in D1 (one per browser), not fake counts
+- [x] Home: hero player + swipeable rail of posters, top voted, autoplay muted in view
+- [x] Record 3+ good vertical runs: wiki 4/4, map 3/3, qodebase 4/4
+- [x] Check at 390 + 1440 light/dark (0 fails); critique by a separate agent: 7 Blocker/High found, all 7 fixed
